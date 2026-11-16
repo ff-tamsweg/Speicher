@@ -1,9 +1,10 @@
 # Speicher
 
 Eigene Web-App zur Überwachung und Steuerung von Marstek-Venus-Speichern (getestet für den Aufbau mit drei Venus E 3.0 an L1, L2 und L3 und einem CT002).
-Die App liest die Speicher direkt im Heimnetz über deren lokale Schnittstelle (Marstek Open API, UDP) aus. Eine Cloud wird nicht verwendet.
+Die App kann auf zwei Arten laufen:
 
-**Vorschau mit simulierten Werten:** über GitHub Pages dieses Repositorys (Link in der Seitenleiste). Die Vorschau zeigt keine echten Daten, weil eine Webseite aus dem Internet die Geräte im Heimnetz nicht erreichen kann.
+- **Mit Marstek-Konto (nur iPhone, kein Gerät zuhause nötig):** Die Seite auf GitHub Pages öffnen, mit dem Marstek-Konto anmelden. Die Werte kommen von den Marstek-Servern, wie bei der Marstek-App. Nur Anzeige, Aktualisierung alle paar Minuten. Der Zugang ist nicht offiziell dokumentiert und kann sich durch Marstek ändern.
+- **Im Heimnetz mit eigenem Server:** `speicher_app.py` auf einem Rechner zuhause starten. Dann direkte Abfrage über die lokale Schnittstelle (Marstek Open API, UDP), ohne Cloud, inklusive CT-Werten und Wechsel der Betriebsart.
 
 ## Funktionen
 
@@ -21,7 +22,15 @@ Die App liest die Speicher direkt im Heimnetz über deren lokale Schnittstelle (
 - Firmware-Updates.
 - Werte des Mikrowechselrichters und des CT002 direkt abfragen. Die CT-Werte kommen über die Speicher.
 
-## Einrichtung
+## Einrichtung mit Marstek-Konto
+
+1. Unter Settings > Pages dieses Repositorys GitHub Pages für den Branch `main` einschalten.
+2. Die Seite in Safari öffnen, mit E-Mail und Passwort des Marstek-Kontos anmelden.
+3. Teilen > Zum Home-Bildschirm.
+
+Neue Speicher werden einmalig in der Marstek-App gekoppelt und ins WLAN eingebunden und erscheinen dann automatisch.
+
+## Einrichtung im Heimnetz
 
 ### 1. In der Marstek-App, je Speicher einmalig
 1. Speicher per Bluetooth koppeln und ins Heim-WLAN (2,4 GHz) einbinden.

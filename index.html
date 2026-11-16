@@ -181,8 +181,21 @@ nav button[aria-current=page]{color:var(--n);font-weight:600}
     <div class="live"><span class="dot" id="dot"></span><span id="stamp">Verbinde</span></div>
   </header>
 
+  <!-- Anmeldung -->
+  <main id="v-login" hidden>
+    <section class="panel pad">
+      <p class="help" style="margin-top:0">Melde dich mit deinem Marstek-Konto an. Die App holt die Werte deiner Speicher dann von den Marstek-Servern, wie die Marstek-App auch.</p>
+      <label for="lMail">E-Mail-Adresse</label><input id="lMail" type="email" autocomplete="username" autocapitalize="off">
+      <label for="lPwd">Passwort</label><input id="lPwd" type="password" autocomplete="current-password">
+      <div class="err" id="lErr"></div>
+      <button class="btn pri wide" id="lOk">Anmelden</button>
+    </section>
+    <p class="help" style="margin-top:12px">Das Passwort wird nicht im Klartext gespeichert, sondern nur als MD5-Prüfsumme in diesem Browser. Marstek lässt eventuell nur eine Anmeldung gleichzeitig zu, die Marstek-App kann dich danach neu anmelden lassen.</p>
+    <div class="row-btns"><button class="btn wide" id="lDemo">Vorschau mit Beispielwerten ansehen</button></div>
+  </main>
+
   <!-- Übersicht -->
-  <main id="v-home">
+  <main id="v-home" hidden>
     <div class="rail"><div class="mods" id="mods"></div></div>
     <div class="notes" id="notes"></div>
 
@@ -214,12 +227,20 @@ nav button[aria-current=page]{color:var(--n);font-weight:600}
   <!-- Geräte -->
   <main id="v-devs" hidden>
     <div class="panel list" id="devList"></div>
-    <div class="row-btns"><button class="btn pri wide" id="bAdd">Speicher hinzufügen</button></div>
+    <p class="help" id="devNote" hidden style="margin-top:10px">Die Speicher kommen aus deinem Marstek-Konto. Neue Speicher richtest du in der Marstek-App ein, sie erscheinen dann hier automatisch. Steht L1, L2 oder L3 im Gerätenamen, ordnet die App die Phase selbst zu.</p>
+    <div class="row-btns" id="addWrap"><button class="btn pri wide" id="bAdd">Speicher hinzufügen</button></div>
   </main>
 
   <!-- Einstellungen -->
   <main id="v-set" hidden>
-    <section class="panel pad">
+    <section id="cloudSet" hidden>
+      <div class="panel pad">
+        <p style="margin:0">Angemeldet als <b id="cMail"></b></p>
+        <p class="help" style="margin:6px 0 12px">Die Werte kommen von den Marstek-Servern. Die Speicher melden sich dort in Abständen von einigen Minuten, schneller aktualisieren sich die Werte hier nicht.</p>
+        <button class="btn danger" id="cOut">Abmelden</button>
+      </div>
+    </section>
+    <section class="panel pad" id="localSet">
       <label for="sInt" style="margin-top:0">Abfrage alle … Sekunden</label>
       <input id="sInt" inputmode="numeric">
       <p class="help" style="margin-top:6px">15 bis 3600. Kurze Abstände können die Verbindung zwischen Speicher und CT-Messgerät stören, 60 Sekunden sind ein guter Wert.</p>
@@ -229,7 +250,14 @@ nav button[aria-current=page]{color:var(--n);font-weight:600}
       <button class="btn pri" id="sOk">Einstellungen speichern</button>
     </section>
 
-    <section class="sec">
+    <section class="sec" id="cloudHelp" hidden>
+      <h2>Neuen Speicher einrichten</h2>
+      <div class="panel pad help">
+        <p>Neue Speicher koppelst du einmalig in der Marstek-App per Bluetooth und bindest sie dort ins Heim-WLAN ein. Danach erscheinen sie hier automatisch.</p>
+        <p>Steht L1, L2 oder L3 im Gerätenamen, ordnet die App den Speicher der Phase zu. Den Namen änderst du in der Marstek-App.</p>
+      </div>
+    </section>
+    <section class="sec" id="localHelp">
       <h2>Neuen Speicher einrichten</h2>
       <div class="panel pad help">
         <p>Die Ersteinrichtung läuft über die Marstek-App, weil Marstek die Bluetooth-Einrichtung nicht offenlegt.</p>
@@ -323,7 +351,7 @@ const $=id=>document.getElementById(id);
 const MODE={Auto:"Eigenverbrauch",AI:"KI-Optimierung",Manual:"Zeitplan",Passive:"Feste Leistung"};
 const PHASE_VAR={L1:"var(--l1)",L2:"var(--l2)",L3:"var(--l3)"};
 const EXTRA=["var(--n)","var(--warn)","var(--ok)"];
-const TITLES={home:"Übersicht",hist:"Verlauf",devs:"Geräte",set:"Einstellungen"};
+const TITLES={home:"Übersicht",hist:"Verlauf",devs:"Geräte",set:"Einstellungen",login:"Anmelden"};
 let S=null,H=null,metric="soc",openKey=null,editKey=null;
 let pin="";try{pin=localStorage.getItem("speicher-pin")||""}catch(e){}
 
@@ -343,18 +371,92 @@ function socClass(s){return s<15?"low":s<30?"mid":""}
 
 /* ---------- Datenzugriff ---------- */
 const STATIC=location.protocol==="file:"||/github\.io$/.test(location.hostname);
-let demo=STATIC;
+let SRC=STATIC?(Cloud_creds()?"cloud":"login"):"server";   /* server | cloud | demo | login */
+function Cloud_creds(){try{return JSON.parse(localStorage.getItem("speicher-cloud")||"null")}catch(e){return null}}
 async function api(path,body){
-  if(demo)return Demo.call(path,body);
+  if(SRC==="demo")return Demo.call(path,body);
+  if(SRC==="cloud")return Cloud.call(path,body);
   const o={headers:{"X-Pin":pin}};
   if(body){o.method="POST";o.headers["Content-Type"]="application/json";o.body=JSON.stringify(body)}
   let r;
   try{r=await fetch(path,o)}catch(e){throw new Error("Server nicht erreichbar")}
   if(r.status===401){const p=prompt("PIN eingeben");if(p==null)throw new Error("PIN erforderlich");
     pin=p;try{localStorage.setItem("speicher-pin",p)}catch(e){}return api(path,body)}
-  if(r.status===404&&path==="/api/state"&&!S){demo=true;return Demo.call(path,body)}
+  if(r.status===404&&path==="/api/state"&&!S){SRC=Cloud_creds()?"cloud":"login";if(SRC==="cloud")return api(path,body);throw new Error("login")}
   const j=await r.json().catch(()=>({error:"Ungültige Antwort"}));
   if(!r.ok)throw new Error(j.error||"Fehler");return j}
+
+/* ---------- MD5 (für die Marstek-Anmeldung) ---------- */
+function md5(str){
+  const b=new TextEncoder().encode(str),n=((b.length+8>>6)+1)*16,w=new Array(n).fill(0);
+  for(let i=0;i<b.length;i++)w[i>>2]|=b[i]<<(i%4*8);
+  w[b.length>>2]|=0x80<<(b.length%4*8);w[n-2]=b.length*8;
+  const K=[],R=[7,12,17,22,5,9,14,20,4,11,16,23,6,10,15,21];
+  for(let i=0;i<64;i++)K[i]=Math.floor(Math.abs(Math.sin(i+1))*4294967296)|0;
+  let h0=0x67452301,h1=0xefcdab89|0,h2=0x98badcfe|0,h3=0x10325476;
+  for(let o=0;o<n;o+=16){let A=h0,B=h1,C=h2,D=h3;
+    for(let i=0;i<64;i++){let F,g;const r=i>>4;
+      if(r===0){F=(B&C)|(~B&D);g=i}else if(r===1){F=(D&B)|(~D&C);g=(5*i+1)%16}
+      else if(r===2){F=B^C^D;g=(3*i+5)%16}else{F=C^(B|~D);g=(7*i)%16}
+      const t=D;D=C;C=B;const x=(A+F+K[i]+w[o+g])|0,sft=R[r*4+i%4];B=(B+((x<<sft)|(x>>>(32-sft))))|0;A=t}
+    h0=(h0+A)|0;h1=(h1+B)|0;h2=(h2+C)|0;h3=(h3+D)|0}
+  return[h0,h1,h2,h3].map(v=>[0,8,16,24].map(k=>((v>>>k)&255).toString(16).padStart(2,"0")).join("")).join("")}
+
+/* ---------- Marstek-Cloud ---------- */
+const Cloud=(()=>{
+  const LOGIN="https://eu.hamedata.com/app/Solar/v2_get_device.php",LIST="https://eu.hamedata.com/ems/api/v1/getDeviceList";
+  const HKEY="speicher-cloud-hist",TKEY="speicher-cloud-token";
+  let cache=null,cacheAt=0;
+  const num=v=>{const x=parseFloat(v);return isFinite(x)?x:null};
+  const ls={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
+  async function req(url,opt){
+    let r;try{r=await fetch(url,Object.assign({cache:"no-store"},opt||{}))}
+    catch(e){const x=new Error("Die Marstek-Server sind von dieser Webseite aus nicht erreichbar.");x.blocked=true;throw x}
+    try{return await r.json()}catch(e){throw new Error("Unerwartete Antwort der Marstek-Server (HTTP "+r.status+").")}}
+  async function login(mail,hash){
+    const j=await req(LOGIN+"?pwd="+encodeURIComponent(hash)+"&mailbox="+encodeURIComponent(mail),{method:"POST"});
+    if(!j||!j.token)throw new Error("Anmeldung abgelehnt"+(j&&j.msg?" ("+j.msg+")":"")+". E-Mail-Adresse und Passwort prüfen.");
+    ls.set(TKEY,j.token);return j.token}
+  async function list(){
+    const c=Cloud_creds();if(!c)throw new Error("Nicht angemeldet");
+    let tok=ls.get(TKEY);
+    for(let k=0;k<2;k++){
+      if(!tok)tok=await login(c.mail,c.pwd);
+      const j=await req(LIST+"?token="+encodeURIComponent(tok));
+      if(j&&Array.isArray(j.data))return j.data;
+      tok=null;ls.del(TKEY);
+      if(k===1)throw new Error("Geräteliste nicht erhalten"+(j&&j.msg?" ("+j.msg+")":"")+".")}}
+  function map(raw,i,now){
+    const rt=num(raw.report_time),ts=rt==null?null:rt>1e12?rt/1000:rt>1e9?rt:null;
+    const name=String(raw.name||raw.sn||("Speicher "+(i+1)));
+    const m=name.match(/L\s?([123])(?!\d)/i);
+    const ch=num(raw.charge),dc=num(raw.discharge);
+    const capK=num(raw.capacity_kwh)||num(raw.capacity);
+    return{key:String(raw.devid||raw.sn||i),name,phase:m?"L"+m[1]:"",ip:"Marstek-Cloud",port:"",
+      online:ts?now-ts<1800:true,last_seen:ts?Math.round(ts):0,report_ts:ts,
+      soc:num(raw.soc),cap_wh:capK?(capK>100?capK:capK*1000):5120,rest_wh:null,
+      power:ch==null&&dc==null?null:(dc||0)-(ch||0),load:num(raw.load),offgrid:null,mode:null,ct:null,
+      phases:[null,null,null],grid_total:null,temp:null,rssi:null,ssid:null,
+      model:raw.type||null,fw:raw.version!=null?raw.version:null,sn:raw.sn||null,today_in_wh:null,today_out_wh:null}}
+  function hist(){try{return JSON.parse(ls.get(HKEY)||"{}")}catch(e){return{}}}
+  function remember(devs,now){const h=hist(),cut=now-86400;
+    devs.forEach(d=>{const a=(h[d.key]||[]).filter(p=>p[0]>=cut);const last=a[a.length-1];
+      if(d.online&&(!last||now-last[0]>=50))a.push([now,d.soc,d.power]);h[d.key]=a.slice(-1500)});
+    ls.set(HKEY,JSON.stringify(h))}
+  return{
+    async signIn(mail,pwd){const c={mail:mail.trim(),pwd:md5(pwd)};
+      await login(c.mail,c.pwd);ls.set("speicher-cloud",JSON.stringify(c));cache=null},
+    signOut(){["speicher-cloud",TKEY,HKEY].forEach(ls.del);cache=null},
+    async call(path){
+      const now=Math.floor(Date.now()/1000);
+      if(path==="/api/state"){
+        if(!cache||Date.now()-cacheAt>55000){
+          const raw=await list();
+          const devs=raw.filter(r=>r&&r.soc!=null).map((r,i)=>map(r,i,now));
+          remember(devs,now);cache=devs;cacheAt=Date.now()}
+        return{now,source:"cloud",interval:60,invert:false,ct_invert:false,devices:cache}}
+      if(path==="/api/history")return{since:now-86400,series:hist()};
+      throw new Error("In der Cloud-Ansicht nicht verfügbar. Das geht in der Marstek-App.")}}})();
 
 /* ---------- Ansicht ---------- */
 function show(v){
@@ -362,17 +464,24 @@ function show(v){
   document.querySelectorAll("nav button").forEach(b=>{if(b.dataset.view===v)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current")});
   $("title").textContent=TITLES[v];
   try{history.replaceState(null,"","#"+v)}catch(e){}
-  window.scrollTo(0,0);
+  window.scrollTo(0,0);current=v;
+  document.querySelector("nav").hidden=v==="login";
   if(v==="set"&&S){$("sInt").value=S.interval;$("sInv").checked=!!S.invert;$("sCt").checked=!!S.ct_invert}
+  const cloud=SRC==="cloud";
+  $("cloudSet").hidden=!cloud;$("localSet").hidden=cloud;$("cloudHelp").hidden=!cloud;$("localHelp").hidden=cloud;
+  document.querySelector(".live").style.visibility=v==="login"?"hidden":"visible";$("devNote").hidden=!cloud;$("addWrap").hidden=cloud;
+  if(cloud){const c=Cloud_creds();$("cMail").textContent=c?c.mail:""}
 }
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>show(b.dataset.view));
 
 function render(){
   const D=S.devices,now=S.now,on=D.filter(d=>d.online);
-  $("demo").hidden=!S.demo;
-  const anyOn=on.length>0;
+  $("demo").hidden=SRC!=="demo";
+  const anyOn=on.length>0,cloud=SRC==="cloud";
   $("dot").className="dot "+(anyOn?"ok":"bad");
-  $("stamp").textContent=(anyOn?"Live, ":"")+new Date(now*1000).toLocaleTimeString("de-AT",{hour:"2-digit",minute:"2-digit"});
+  if(cloud){const rep=Math.max(0,...D.map(d=>d.report_ts||0));
+    $("stamp").textContent=rep?"Marstek-Stand "+new Date(rep*1000).toLocaleTimeString("de-AT",{hour:"2-digit",minute:"2-digit"}):"Marstek-Cloud"}
+  else $("stamp").textContent=(anyOn?"Live, ":"")+new Date(now*1000).toLocaleTimeString("de-AT",{hour:"2-digit",minute:"2-digit"});
 
   /* Module auf der Hutschiene */
   const mods=$("mods");mods.replaceChildren();
@@ -392,9 +501,9 @@ function render(){
   /* Hinweise */
   const N=$("notes");N.replaceChildren();
   D.forEach(d=>{
-    if(d.online===false){const n=el("div","note bad"),t=el("div");t.append(el("b",null,d.name+" antwortet nicht"),
-      document.createTextNode("Seit "+ago(d.last_seen,now).replace("zuletzt ","").replace(" erreicht","")+". WLAN-Verbindung, Stromversorgung und lokale Schnittstelle in der Marstek-App prüfen."));
-      if(!d.last_seen)t.lastChild.textContent="Bisher keine Antwort. WLAN-Verbindung, Stromversorgung und lokale Schnittstelle in der Marstek-App prüfen.";
+    if(d.online===false){const n=el("div","note bad"),t=el("div");t.append(el("b",null,d.name+(cloud?" ist offline":" antwortet nicht")),
+      document.createTextNode(cloud?"Hat sich "+ago(d.last_seen,now).replace("zuletzt ","").replace(" erreicht","")+" zuletzt bei Marstek gemeldet. WLAN-Verbindung und Stromversorgung prüfen.":"Seit "+ago(d.last_seen,now).replace("zuletzt ","").replace(" erreicht","")+". WLAN-Verbindung, Stromversorgung und lokale Schnittstelle in der Marstek-App prüfen."));
+      if(!d.last_seen)t.lastChild.textContent=cloud?"Keine Meldung bei Marstek. WLAN-Verbindung und Stromversorgung prüfen.":"Bisher keine Antwort. WLAN-Verbindung, Stromversorgung und lokale Schnittstelle in der Marstek-App prüfen.";
       n.append(t);N.append(n)}
     else if(d.online&&d.ct===0&&d.mode==="Auto"){const n=el("div","note"),t=el("div");
       t.append(el("b",null,d.name+" hat keine CT-Messwerte"),document.createTextNode("Im Eigenverbrauch regelt der Speicher ohne Messwerte nicht. In der Marstek-App unter CT das Messgerät zuordnen."));n.append(t);N.append(n)}
@@ -416,9 +525,9 @@ function render(){
     ["L1","L2","L3"].forEach((l,i)=>{const c=el("div");c.style.setProperty("--pc",PHASE_VAR[l]);
       c.append(el("b",null,fmt(src.phases[i])+" W"),el("span",null,l));ph.append(c)});
     row.append(ph);P.append(row);
-  }else P.append(kv("Netz am Hausanschluss","–","Kein Speicher meldet Messwerte vom CT"));
+  }else if(!cloud)P.append(kv("Netz am Hausanschluss","–","Kein Speicher meldet Messwerte vom CT"));
   const tin=sumOrNull(on.map(d=>d.today_in_wh)),tout=sumOrNull(on.map(d=>d.today_out_wh));
-  P.append(kv("Heute geladen",kwh(tin),"Heute entladen "+kwh(tout)));
+  if(!cloud)P.append(kv("Heute geladen",kwh(tin),"Heute entladen "+kwh(tout)));
 
   renderDevList();renderEnergy();
   if(openKey&&$("dDev").open)fillDev(openKey);
@@ -433,13 +542,14 @@ function renderDevList(){
   if(!S.devices.length){L.append(el("div","empty","Noch kein Speicher eingetragen. Speicher hinzufügen und die IP-Adresse aus dem Router oder der Marstek-App eintragen."));return}
   S.devices.forEach((d,i)=>{
     const b=el("button","item");b.style.setProperty("--pc",color(d,i));
-    const t=el("div","t");t.append(el("b",null,d.name),el("span",null,(d.phase?d.phase+", ":"")+d.ip+":"+d.port));
+    const t=el("div","t");t.append(el("b",null,d.name),el("span",null,(d.phase?d.phase+", ":"")+(SRC==="cloud"?(d.sn?"SN "+d.sn:"Marstek-Cloud"):d.ip+":"+d.port)));
     b.append(el("span","bar"),t,el("span","pill "+(d.online?"on":d.online===false?"off":"unk"),d.online?"Online":d.online===false?"Offline":"Prüfe"));
     b.onclick=()=>openDev(d.key);L.append(b)})}
 
 function renderEnergy(){
   const E=$("energy");E.replaceChildren();
   const on=S.devices.filter(d=>d.online);
+  if(SRC==="cloud"){E.append(el("div","empty","Die Marstek-Cloud liefert keine Tageswerte. Ladestand und Leistung siehst du oben im Verlauf."));return}
   if(!on.length){E.append(el("div","empty","Keine Daten. Werte erscheinen, sobald ein Speicher online ist."));return}
   on.forEach(d=>E.append(kv(d.name,kwh(d.today_in_wh),"Geladen. Entladen: "+kwh(d.today_out_wh))))}
 
@@ -478,6 +588,17 @@ function fillDev(k){const d=find(k);if(!d){$("dDev").close();return}
   $("dvName").textContent=d.name;
   $("dvSub").textContent=(d.phase?"Phase "+d.phase+", ":"")+(d.online?"online":d.online===false?ago(d.last_seen,S.now):"wird abgefragt");
   const D=$("dvDet");D.replaceChildren();
+  const cloud=SRC==="cloud";
+  $("dvMode").hidden=$("dvEdit").hidden=$("dvDel").hidden=cloud;
+  if(cloud){
+    D.append(kv("Ladestand",fmt(d.soc)+" %",d.cap_wh?"etwa "+kwh(d.cap_wh*(d.soc||0)/100)+" von "+kwh(d.cap_wh):null,d.soc),
+      kv("Leistung",flow(d.power).t),
+      kv("Last laut Marstek",watt(d.load)),
+      kv("Zuletzt gemeldet",d.report_ts?new Date(d.report_ts*1000).toLocaleString("de-AT",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"–"),
+      kv("Gerät",d.model||"–",[d.fw!=null?"Firmware "+d.fw:null,d.sn?"SN "+d.sn:null].filter(Boolean).join(", ")||null));
+    D.append(el("p","help","Betriebsart und Einstellungen änderst du in der Marstek-App."));
+    $("dvSub").textContent=(d.phase?"Phase "+d.phase+", ":"")+(d.online?"online":"offline");
+    return}
   if(d.online){
     const inh=d.rest_wh!=null?d.rest_wh:(d.cap_wh&&d.soc!=null?d.cap_wh*d.soc/100:null);
     D.append(kv("Ladestand",fmt(d.soc)+" %",kwh(inh)+" von "+kwh(d.cap_wh),d.soc),
@@ -531,9 +652,24 @@ document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>b.closest("di
 document.querySelectorAll("dialog").forEach(d=>d.addEventListener("click",e=>{if(e.target===d)d.close()}));
 
 /* ---------- Laden ---------- */
+let current="home";
 async function load(){
-  try{S=await api("/api/state");render();H=await api("/api/history");drawCharts()}
-  catch(e){$("dot").className="dot bad";$("stamp").textContent=e.message}}
+  if(SRC==="login"){show("login");return}
+  try{S=await api("/api/state");if(current==="login")show("home");render();H=await api("/api/history");drawCharts()}
+  catch(e){
+    if(e.message==="login"||SRC==="login"){show("login");return}
+    $("dot").className="dot bad";$("stamp").textContent=e.blocked?"Keine Verbindung zu Marstek":e.message;
+    if(SRC==="cloud"&&!S){show("login");$("lErr").textContent=e.blocked?BLOCKED:e.message}}}
+const BLOCKED="Safari lässt die Abfrage der Marstek-Server von dieser Webseite aus nicht zu. Schick mir diese Meldung, dann baue ich die Variante mit der iPhone-App Scriptable, die diese Sperre nicht hat.";
+$("lOk").onclick=async()=>{$("lErr").textContent="";const m=$("lMail").value,p=$("lPwd").value;
+  if(!m||!p){$("lErr").textContent="E-Mail-Adresse und Passwort eintragen.";return}
+  $("lOk").disabled=true;$("lOk").textContent="Anmelden …";
+  try{await Cloud.signIn(m,p);SRC="cloud";$("lPwd").value="";show("home");await load()}
+  catch(e){$("lErr").textContent=e.blocked?BLOCKED:e.message}
+  finally{$("lOk").disabled=false;$("lOk").textContent="Anmelden"}};
+$("lDemo").onclick=()=>{SRC="demo";S=null;show("home");load()};
+$("cOut").onclick=()=>{if(!confirm("Abmelden? Der gespeicherte Verlauf in diesem Browser wird gelöscht."))return;
+  Cloud.signOut();SRC="login";S=null;H=null;show("login")};
 
 /* ---------- Vorschau ohne Server (GitHub Pages) ---------- */
 const Demo=(()=>{
@@ -567,7 +703,7 @@ const Demo=(()=>{
     if(path==="/api/devices/delete"){const i=devs.findIndex(x=>x.key===body.key);if(i>=0)devs.splice(i,1);return res({ok:true})}
     rej(new Error("Nicht verfügbar"))},120))}}})();
 
-const start=(location.hash||"#home").slice(1);show(TITLES[start]?start:"home");
+const start=(location.hash||"#home").slice(1);show(SRC==="login"?"login":(TITLES[start]&&start!=="login"?start:"home"));
 load();setInterval(()=>{if(!document.hidden)load()},15000);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)load()});
 if("serviceWorker"in navigator&&!STATIC&&location.protocol==="https:"){/* bewusst kein Offline-Cache: Werte müssen live sein */}
