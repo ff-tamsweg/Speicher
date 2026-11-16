@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Speicher">
+<meta name="theme-color" content="#e4e5e1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1b1d1f" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>Speicher</title>
+<style>
+:root{
+  --case:#e4e5e1;        /* Verteilergehäuse, angelehnt an RAL 7035 */
+  --module:#fbfbf9;
+  --rail:#c9cbc6;
+  --ink:#1c1f22;
+  --mute:#5d646b;
+  --line:#d6d8d3;
+  --l1:#7a4a26;          /* Außenleiter L1 braun */
+  --l2:#26292c;          /* L2 schwarz */
+  --l3:#8a8f94;          /* L3 grau */
+  --n:#2f5da8;           /* Neutralleiter blau – Aktionsfarbe */
+  --ok:#2e7d4f; --warn:#b7791f; --bad:#b3261e;
+  --slot:#e9eae6;
+  --din:"DIN Alternate","Bahnschrift","D-DIN","Roboto Condensed","Arial Narrow",sans-serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --case:#1b1d1f; --module:#25282b; --rail:#34383c; --ink:#eceeec; --mute:#a0a8af; --line:#363a3e;
+  --l1:#b07a4f; --l2:#d4d7da; --l3:#8a9097; --n:#7fa6e6;
+  --ok:#5cbf86; --warn:#e3a54c; --bad:#f07c73; --slot:#1f2225;
+}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--case);color:var(--ink);font:16px/1.45 var(--sans)}
+body{padding:env(safe-area-inset-top) 0 calc(78px + env(safe-area-inset-bottom))}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--n);outline-offset:2px}
+[hidden]{display:none!important}
+
+/* Kopf */
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:22px 0 16px}
+.head h1{font:600 30px/1 var(--din);letter-spacing:.01em;margin:0}
+.live{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--mute);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mute)}
+.dot.ok{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 22%,transparent)}
+.dot.bad{background:var(--bad)}
+.demo{background:var(--warn);color:#fff;font-size:13px;text-align:center;padding:6px 12px}
+
+/* Hutschiene mit Modulen */
+.rail{position:relative;padding:14px 10px;border-radius:10px;background:var(--rail)}
+.rail::before{content:"";position:absolute;left:0;right:0;top:50%;height:22px;transform:translateY(-50%);
+  background:repeating-linear-gradient(90deg,transparent 0 22px,rgba(0,0,0,.07) 22px 30px);pointer-events:none}
+.mods{position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px}
+.mod{position:relative;background:var(--module);border:1px solid var(--line);border-radius:5px;padding:0 0 12px;
+  text-align:center;cursor:pointer;overflow:hidden;min-height:268px;display:flex;flex-direction:column;align-items:center}
+.mod .wire{width:100%;height:7px;background:var(--pc,var(--l3))}
+.mod .wire.none{background:repeating-linear-gradient(90deg,var(--l3) 0 6px,transparent 6px 12px)}
+.mod .ph{font:600 22px/1 var(--din);margin-top:12px;color:var(--pc,var(--ink))}
+.mod .nm{font-size:12px;color:var(--mute);margin:3px 6px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:94%}
+.mod .soc{font:600 34px/1 var(--din);margin-top:12px;font-variant-numeric:tabular-nums}
+.mod .soc small{font-size:17px;margin-left:1px}
+.slot{width:34px;height:96px;margin:12px auto 0;border-radius:4px;background:var(--slot);border:1px solid var(--line);
+  position:relative;overflow:hidden}
+.slot i{position:absolute;left:0;right:0;bottom:0;background:var(--ok);transition:height .6s ease}
+.slot i.mid{background:var(--warn)} .slot i.low{background:var(--bad)}
+.slot::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 18px,var(--module) 18px 19px);opacity:.55}
+.mod .st{font-size:13px;margin-top:10px;font-weight:600;font-variant-numeric:tabular-nums}
+.st.chg{color:var(--ok)} .st.dis{color:var(--n)} .st.idle{color:var(--mute)} .st.off{color:var(--bad)}
+.mod.offline .soc,.mod.offline .slot{opacity:.35}
+.mod .led{position:absolute;top:15px;right:10px;width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.mod.offline .led{background:var(--bad)} .mod.pending .led{background:var(--mute)}
+.mod.add{justify-content:center;color:var(--mute);border-style:dashed;background:transparent;font-size:14px;gap:6px}
+
+/* Abschnitte */
+.sec{margin-top:26px}
+.sec h2{font:600 19px/1.2 var(--din);margin:0 0 10px}
+.panel{background:var(--module);border:1px solid var(--line);border-radius:10px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:4px 14px;padding:14px 16px;border-top:1px solid var(--line);align-items:baseline}
+.kv:first-child{border-top:0}
+.kv .k{color:var(--mute);font-size:14px}
+.kv .v{font:600 22px/1.15 var(--din);text-align:right;font-variant-numeric:tabular-nums}
+.kv .s{grid-column:1/-1;font-size:13px;color:var(--mute)}
+.meter{grid-column:1/-1;height:6px;background:var(--slot);border-radius:3px;overflow:hidden;margin-top:6px}
+.meter i{display:block;height:100%;background:var(--ok)}
+.phases{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.phases div{border-left:3px solid var(--pc);padding:2px 0 2px 8px}
+.phases b{display:block;font:600 16px/1.2 var(--din);font-variant-numeric:tabular-nums}
+.phases span{font-size:12px;color:var(--mute)}
+
+.notes{display:grid;gap:8px;margin-top:14px}
+.note{display:flex;gap:10px;align-items:flex-start;background:var(--module);border:1px solid var(--line);
+  border-left:4px solid var(--warn);border-radius:8px;padding:10px 12px;font-size:14px}
+.note.bad{border-left-color:var(--bad)}
+.note b{display:block}
+
+/* Listen */
+.list .item{display:flex;align-items:center;gap:12px;padding:13px 14px;border-top:1px solid var(--line);
+  width:100%;text-align:left;background:none;border-left:0;border-right:0;border-bottom:0}
+.list .item:first-child{border-top:0}
+.item .bar{width:5px;align-self:stretch;border-radius:3px;background:var(--pc,var(--l3))}
+.item .t{flex:1;min-width:0}
+.item .t b{display:block;font-weight:600}
+.item .t span{font-size:13px;color:var(--mute)}
+.pill{font-size:12px;font-weight:600;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.pill.on{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.pill.off{background:color-mix(in srgb,var(--bad) 15%,transparent);color:var(--bad)}
+.pill.unk{background:var(--slot);color:var(--mute)}
+
+.btn{border:1px solid var(--line);background:var(--module);border-radius:9px;padding:11px 16px;font-weight:600}
+.btn.pri{background:var(--n);border-color:var(--n);color:#fff}
+@media (prefers-color-scheme:dark){.btn.pri{color:#10151c}}
+.btn.wide{width:100%}
+.btn.ghost{background:none;border:0;color:var(--n);padding:10px 4px}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.5;cursor:default}
+.row-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+/* Diagramm */
+.seg{display:inline-flex;background:var(--slot);border-radius:9px;padding:3px;margin-bottom:10px}
+.seg button{border:0;background:none;padding:7px 14px;border-radius:7px;font-size:14px;color:var(--mute)}
+.seg button[aria-pressed=true]{background:var(--module);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.chart{padding:14px 10px 10px}
+.chart svg{display:block;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px;color:var(--mute);padding:0 6px}
+.legend i{display:inline-block;width:16px;height:3px;border-radius:2px;background:var(--pc);vertical-align:middle;margin-right:6px}
+.empty{padding:26px 18px;text-align:center;color:var(--mute);font-size:14px}
+
+/* Formulare */
+label{display:block;font-size:14px;color:var(--mute);margin:14px 0 5px}
+input:not([type=checkbox]),select{width:100%;padding:11px 12px;border-radius:9px;border:1px solid var(--line);background:var(--case)}
+.check{display:flex;gap:10px;align-items:flex-start;color:var(--ink);font-size:15px}
+.check input{margin-top:4px;width:18px;height:18px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.err{color:var(--bad);font-size:14px;min-height:1.3em;margin-top:10px}
+.help{font-size:14px;color:var(--mute)}
+.help p{margin:0 0 10px}
+.help ol{margin:0 0 10px;padding-left:20px}
+.pad{padding:16px}
+
+/* Bottom-Sheet */
+dialog{border:0;padding:0;background:var(--module);color:var(--ink);width:100%;max-width:560px;
+  margin:auto auto 0;border-radius:16px 16px 0 0;max-height:88vh}
+@media (min-width:640px){dialog{margin:auto;border-radius:16px}}
+dialog::backdrop{background:rgba(20,22,24,.45)}
+dialog[open]{animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(24px);opacity:.6}}
+@media (prefers-reduced-motion:reduce){dialog[open]{animation:none}.slot i{transition:none}}
+.sheet{padding:8px 18px calc(18px + env(safe-area-inset-bottom))}
+.grab{width:38px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 12px}
+.sheet h3{font:600 22px/1.2 var(--din);margin:0}
+.sheet .sub{font-size:13px;color:var(--mute);margin-top:2px}
+.sheet .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.det{margin-top:12px}
+.det .kv{padding:10px 0}
+.det .kv .v{font-size:17px}
+
+/* Navigation unten */
+nav{position:fixed;left:0;right:0;bottom:0;background:color-mix(in srgb,var(--module) 92%,transparent);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav .in{max-width:760px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
+nav button{border:0;background:none;padding:8px 4px 7px;display:flex;flex-direction:column;align-items:center;gap:3px;
+  font-size:11px;color:var(--mute)}
+nav button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav button[aria-current=page]{color:var(--n);font-weight:600}
+</style>
+</head>
+<body>
+<div id="demo" class="demo" hidden>Vorschau mit simulierten Werten. Echte Daten zeigt die App, wenn sie im Heimnetz läuft.</div>
+
+<div class="wrap">
+  <header class="head">
+    <h1 id="title">Übersicht</h1>
+    <div class="live"><span class="dot" id="dot"></span><span id="stamp">Verbinde</span></div>
+  </header>
+
+  <!-- Übersicht -->
+  <main id="v-home">
+    <div class="rail"><div class="mods" id="mods"></div></div>
+    <div class="notes" id="notes"></div>
+
+    <section class="sec">
+      <h2>Anlage</h2>
+      <div class="panel" id="plant"></div>
+    </section>
+
+    <section class="sec">
+      <h2>Ladestand der letzten 24 Stunden</h2>
+      <div class="panel chart"><div id="miniChart"></div><div class="legend" id="miniLeg"></div></div>
+    </section>
+  </main>
+
+  <!-- Verlauf -->
+  <main id="v-hist" hidden>
+    <div class="seg" role="group" aria-label="Messgröße">
+      <button data-metric="soc" aria-pressed="true">Ladestand</button>
+      <button data-metric="power" aria-pressed="false">Leistung</button>
+    </div>
+    <div class="panel chart"><div id="bigChart"></div><div class="legend" id="bigLeg"></div></div>
+    <p class="help" id="histNote" style="margin-top:10px"></p>
+    <section class="sec">
+      <h2>Energie heute</h2>
+      <div class="panel" id="energy"></div>
+    </section>
+  </main>
+
+  <!-- Geräte -->
+  <main id="v-devs" hidden>
+    <div class="panel list" id="devList"></div>
+    <div class="row-btns"><button class="btn pri wide" id="bAdd">Speicher hinzufügen</button></div>
+  </main>
+
+  <!-- Einstellungen -->
+  <main id="v-set" hidden>
+    <section class="panel pad">
+      <label for="sInt" style="margin-top:0">Abfrage alle … Sekunden</label>
+      <input id="sInt" inputmode="numeric">
+      <p class="help" style="margin-top:6px">15 bis 3600. Kurze Abstände können die Verbindung zwischen Speicher und CT-Messgerät stören, 60 Sekunden sind ein guter Wert.</p>
+      <label class="check"><input type="checkbox" id="sInv"><span>Laden und Entladen vertauscht anzeigen<br><small class="help">Einschalten, wenn die App beim Laden „Entlädt“ anzeigt.</small></span></label>
+      <label class="check"><input type="checkbox" id="sCt"><span>Netzbezug und Einspeisung vertauscht anzeigen<br><small class="help">Hängt von der Einbaurichtung der Stromklemmen am CT ab.</small></span></label>
+      <div class="err" id="sErr"></div>
+      <button class="btn pri" id="sOk">Einstellungen speichern</button>
+    </section>
+
+    <section class="sec">
+      <h2>Neuen Speicher einrichten</h2>
+      <div class="panel pad help">
+        <p>Die Ersteinrichtung läuft über die Marstek-App, weil Marstek die Bluetooth-Einrichtung nicht offenlegt.</p>
+        <ol>
+          <li>Speicher in der Marstek-App per Bluetooth koppeln und ins Heim-WLAN (2,4 GHz) einbinden.</li>
+          <li>In den Geräteeinstellungen die lokale Schnittstelle (Open API) einschalten, Port 30000.</li>
+          <li>Im Router dem Speicher eine feste IP-Adresse geben.</li>
+          <li>Hier unter Geräte „Speicher hinzufügen“ wählen.</li>
+        </ol>
+        <p>Von unterwegs erreichst du die App über eine VPN-Verbindung ins Heimnetz, zum Beispiel WireGuard am Router.</p>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Über</h2>
+      <div class="panel pad help" id="about">
+        <p>Speicher 2.0. Liest die Speicher direkt im Heimnetz aus, ohne Cloud.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<nav aria-label="Hauptmenü"><div class="in">
+  <button data-view="home" aria-current="page"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="9.5" y="4" width="5" height="16" rx="1"/><rect x="16" y="4" width="5" height="16" rx="1"/><path d="M3 12h18"/></svg>Übersicht</button>
+  <button data-view="hist"><svg viewBox="0 0 24 24"><path d="M3 20h18"/><path d="M4 16l5-6 4 3 7-8"/></svg>Verlauf</button>
+  <button data-view="devs"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M10 3V1.8M14 3V1.8"/><path d="M9 14h6M9 17h6"/></svg>Geräte</button>
+  <button data-view="set"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Einstellungen</button>
+</div></nav>
+
+<!-- Gerät im Detail -->
+<dialog id="dDev"><div class="sheet">
+  <div class="grab"></div>
+  <h3 id="dvName"></h3><div class="sub" id="dvSub"></div>
+  <div class="det" id="dvDet"></div>
+  <div class="row-btns">
+    <button class="btn pri" id="dvMode">Betriebsart ändern</button>
+    <button class="btn" id="dvEdit">Bearbeiten</button>
+    <button class="btn danger" id="dvDel">Entfernen</button>
+  </div>
+  <div class="foot"><button class="btn ghost" data-close>Schließen</button></div>
+</div></dialog>
+
+<!-- Hinzufügen / Bearbeiten -->
+<dialog id="dAdd"><div class="sheet">
+  <div class="grab"></div>
+  <h3 id="aTitle">Speicher hinzufügen</h3>
+  <div id="aDiscWrap">
+    <div class="row-btns"><button class="btn" id="bDisc">Im Heimnetz suchen</button></div>
+    <div class="help" id="disc" style="margin-top:8px"></div>
+  </div>
+  <label for="aName">Bezeichnung</label><input id="aName" maxlength="40" placeholder="Speicher Keller">
+  <label for="aPhase">Angeschlossen an Phase</label>
+  <select id="aPhase"><option value="L1">L1</option><option value="L2">L2</option><option value="L3">L3</option><option value="">Nicht zugeordnet</option></select>
+  <div class="two">
+    <div><label for="aIp">IP-Adresse</label><input id="aIp" inputmode="decimal" placeholder="192.168.1.50"></div>
+    <div><label for="aPort">Port</label><input id="aPort" inputmode="numeric" value="30000"></div>
+  </div>
+  <div class="err" id="aErr"></div>
+  <div class="foot"><button class="btn ghost" data-close>Abbrechen</button><button class="btn pri" id="aOk">Speichern</button></div>
+</div></dialog>
+
+<!-- Betriebsart -->
+<dialog id="dMode"><div class="sheet">
+  <div class="grab"></div>
+  <h3 id="mTitle">Betriebsart</h3>
+  <label for="mMode">Betriebsart</label>
+  <select id="mMode">
+    <option value="Auto">Eigenverbrauch nach CT-Messung</option>
+    <option value="AI">KI-Optimierung von Marstek</option>
+    <option value="Passive">Feste Leistung für eine Dauer</option>
+    <option value="Manual">Täglicher Zeitplan</option>
+  </select>
+  <div id="mPow">
+    <div class="two">
+      <div><label for="mDir">Richtung</label><select id="mDir"><option value="laden">Laden</option><option value="entladen">Entladen</option></select></div>
+      <div><label for="mW">Leistung in Watt</label><input id="mW" inputmode="numeric" value="800"></div>
+    </div>
+    <div id="mPas"><label for="mMin">Dauer in Minuten</label><input id="mMin" inputmode="numeric" value="60"></div>
+    <div id="mMan" class="two">
+      <div><label for="mS">Beginn</label><input id="mS" type="time" value="10:00"></div>
+      <div><label for="mE">Ende</label><input id="mE" type="time" value="15:00"></div>
+    </div>
+  </div>
+  <div class="err" id="mErr"></div>
+  <div class="foot"><button class="btn ghost" data-close>Abbrechen</button><button class="btn pri" id="mOk">Betriebsart übernehmen</button></div>
+</div></dialog>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const MODE={Auto:"Eigenverbrauch",AI:"KI-Optimierung",Manual:"Zeitplan",Passive:"Feste Leistung"};
+const PHASE_VAR={L1:"var(--l1)",L2:"var(--l2)",L3:"var(--l3)"};
+const EXTRA=["var(--n)","var(--warn)","var(--ok)"];
+const TITLES={home:"Übersicht",hist:"Verlauf",devs:"Geräte",set:"Einstellungen"};
+let S=null,H=null,metric="soc",openKey=null,editKey=null;
+let pin="";try{pin=localStorage.getItem("speicher-pin")||""}catch(e){}
+
+/* ---------- Hilfen ---------- */
+function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+const nf=d=>new Intl.NumberFormat("de-AT",{minimumFractionDigits:d,maximumFractionDigits:d});
+function fmt(n,d=0){return n==null||isNaN(n)?"–":nf(d).format(n)}
+function kwh(wh,d=2){return wh==null?"–":fmt(wh/1000,d)+" kWh"}
+function watt(w){if(w==null)return"–";return Math.abs(w)>=1000?fmt(w/1000,2)+" kW":fmt(w)+" W"}
+function ago(ts,now){if(!ts)return"bisher nicht erreicht";const s=now-ts;
+  if(s<90)return"zuletzt vor "+Math.max(1,s)+" s erreicht";if(s<5400)return"zuletzt vor "+Math.round(s/60)+" min erreicht";
+  if(s<172800)return"zuletzt vor "+Math.round(s/3600)+" h erreicht";return"zuletzt vor "+Math.round(s/86400)+" Tagen erreicht"}
+function color(d,i){return PHASE_VAR[d.phase]||EXTRA[i%EXTRA.length]}
+function flow(p){if(p==null)return{t:"–",c:"idle"};if(Math.abs(p)<5)return{t:"Standby",c:"idle"};
+  return p<0?{t:"Lädt "+watt(-p),c:"chg"}:{t:"Entlädt "+watt(p),c:"dis"}}
+function socClass(s){return s<15?"low":s<30?"mid":""}
+
+/* ---------- Datenzugriff ---------- */
+const STATIC=location.protocol==="file:"||/github\.io$/.test(location.hostname);
+let demo=STATIC;
+async function api(path,body){
+  if(demo)return Demo.call(path,body);
+  const o={headers:{"X-Pin":pin}};
+  if(body){o.method="POST";o.headers["Content-Type"]="application/json";o.body=JSON.stringify(body)}
+  let r;
+  try{r=await fetch(path,o)}catch(e){throw new Error("Server nicht erreichbar")}
+  if(r.status===401){const p=prompt("PIN eingeben");if(p==null)throw new Error("PIN erforderlich");
+    pin=p;try{localStorage.setItem("speicher-pin",p)}catch(e){}return api(path,body)}
+  if(r.status===404&&path==="/api/state"&&!S){demo=true;return Demo.call(path,body)}
+  const j=await r.json().catch(()=>({error:"Ungültige Antwort"}));
+  if(!r.ok)throw new Error(j.error||"Fehler");return j}
+
+/* ---------- Ansicht ---------- */
+function show(v){
+  document.querySelectorAll("main").forEach(m=>m.hidden=m.id!=="v-"+v);
+  document.querySelectorAll("nav button").forEach(b=>{if(b.dataset.view===v)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current")});
+  $("title").textContent=TITLES[v];
+  try{history.replaceState(null,"","#"+v)}catch(e){}
+  window.scrollTo(0,0);
+  if(v==="set"&&S){$("sInt").value=S.interval;$("sInv").checked=!!S.invert;$("sCt").checked=!!S.ct_invert}
+}
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>show(b.dataset.view));
+
+function render(){
+  const D=S.devices,now=S.now,on=D.filter(d=>d.online);
+  $("demo").hidden=!S.demo;
+  const anyOn=on.length>0;
+  $("dot").className="dot "+(anyOn?"ok":"bad");
+  $("stamp").textContent=(anyOn?"Live, ":"")+new Date(now*1000).toLocaleTimeString("de-AT",{hour:"2-digit",minute:"2-digit"});
+
+  /* Module auf der Hutschiene */
+  const mods=$("mods");mods.replaceChildren();
+  D.forEach((d,i)=>{
+    const m=el("button","mod"+(d.online===false?" offline":d.online==null?" pending":""));
+    m.style.setProperty("--pc",color(d,i));
+    m.setAttribute("aria-label",d.name+", "+(d.online?fmt(d.soc)+" Prozent":"offline"));
+    m.append(el("div","wire"+(d.phase?"":" none")),el("span","led"),el("div","ph",d.phase||"–"),el("div","nm",d.name));
+    const soc=el("div","soc");if(d.online&&d.soc!=null)soc.append(document.createTextNode(fmt(d.soc)),el("small",null,"%"));else soc.textContent="–";m.append(soc);
+    const slot=el("div","slot"),fill=el("i",socClass(d.soc));fill.style.height=(d.online?Math.max(0,Math.min(100,d.soc||0)):0)+"%";slot.append(fill);m.append(slot);
+    const f=d.online?flow(d.power):d.online===false?{t:"Offline",c:"off"}:{t:"Wird abgefragt",c:"idle"};
+    m.append(el("div","st "+f.c,f.t));
+    m.onclick=()=>openDev(d.key);
+    mods.append(m)});
+  if(!D.length){const a=el("button","mod add");a.append(el("b",null,"+"),el("span",null,"Ersten Speicher hinzufügen"));a.onclick=openAdd;mods.append(a)}
+
+  /* Hinweise */
+  const N=$("notes");N.replaceChildren();
+  D.forEach(d=>{
+    if(d.online===false){const n=el("div","note bad"),t=el("div");t.append(el("b",null,d.name+" antwortet nicht"),
+      document.createTextNode("Seit "+ago(d.last_seen,now).replace("zuletzt ","").replace(" erreicht","")+". WLAN-Verbindung, Stromversorgung und lokale Schnittstelle in der Marstek-App prüfen."));
+      if(!d.last_seen)t.lastChild.textContent="Bisher keine Antwort. WLAN-Verbindung, Stromversorgung und lokale Schnittstelle in der Marstek-App prüfen.";
+      n.append(t);N.append(n)}
+    else if(d.online&&d.ct===0&&d.mode==="Auto"){const n=el("div","note"),t=el("div");
+      t.append(el("b",null,d.name+" hat keine CT-Messwerte"),document.createTextNode("Im Eigenverbrauch regelt der Speicher ohne Messwerte nicht. In der Marstek-App unter CT das Messgerät zuordnen."));n.append(t);N.append(n)}
+  });
+
+  /* Anlage */
+  const P=$("plant");P.replaceChildren();
+  const cap=on.reduce((a,d)=>a+(d.cap_wh||0),0);
+  const rest=on.reduce((a,d)=>a+(d.cap_wh&&d.soc!=null?d.cap_wh*d.soc/100:0),0);
+  const pw=on.reduce((a,d)=>a+(d.power||0),0);
+  P.append(kv("Gespeichert",cap?kwh(rest):"–",cap?"von "+kwh(cap)+" in "+on.length+" von "+D.length+" Speichern":"Keine Daten",cap?rest/cap*100:null));
+  const f=flow(anyOn?pw:null);
+  P.append(kv("Speicher gesamt",f.c==="idle"?(anyOn?"0 W":"–"):watt(Math.abs(pw)),anyOn?(f.c==="chg"?"Die Speicher laden":f.c==="dis"?"Die Speicher geben Strom ab":"Kein Laden oder Entladen"):"Keine Daten"));
+  const src=on.find(d=>d.ct===1);
+  if(src){
+    const g=src.grid_total,row=kv("Netz am Hausanschluss",watt(g==null?null:Math.abs(g)),
+      g==null?"–":Math.abs(g)<10?"Ausgeglichen":g>0?"Bezug aus dem Netz":"Einspeisung ins Netz");
+    const ph=el("div","phases");
+    ["L1","L2","L3"].forEach((l,i)=>{const c=el("div");c.style.setProperty("--pc",PHASE_VAR[l]);
+      c.append(el("b",null,fmt(src.phases[i])+" W"),el("span",null,l));ph.append(c)});
+    row.append(ph);P.append(row);
+  }else P.append(kv("Netz am Hausanschluss","–","Kein Speicher meldet Messwerte vom CT"));
+  const tin=sumOrNull(on.map(d=>d.today_in_wh)),tout=sumOrNull(on.map(d=>d.today_out_wh));
+  P.append(kv("Heute geladen",kwh(tin),"Heute entladen "+kwh(tout)));
+
+  renderDevList();renderEnergy();
+  if(openKey&&$("dDev").open)fillDev(openKey);
+}
+function sumOrNull(a){const v=a.filter(x=>x!=null);return v.length?v.reduce((x,y)=>x+y,0):null}
+function kv(k,v,s,pct){const r=el("div","kv");r.append(el("div","k",k),el("div","v",v));if(s)r.append(el("div","s",s));
+  if(pct!=null){const m=el("div","meter"),i=el("i");i.style.width=Math.max(0,Math.min(100,pct))+"%";if(pct<15)i.style.background="var(--bad)";else if(pct<30)i.style.background="var(--warn)";m.append(i);r.append(m)}
+  return r}
+
+function renderDevList(){
+  const L=$("devList");L.replaceChildren();
+  if(!S.devices.length){L.append(el("div","empty","Noch kein Speicher eingetragen. Speicher hinzufügen und die IP-Adresse aus dem Router oder der Marstek-App eintragen."));return}
+  S.devices.forEach((d,i)=>{
+    const b=el("button","item");b.style.setProperty("--pc",color(d,i));
+    const t=el("div","t");t.append(el("b",null,d.name),el("span",null,(d.phase?d.phase+", ":"")+d.ip+":"+d.port));
+    b.append(el("span","bar"),t,el("span","pill "+(d.online?"on":d.online===false?"off":"unk"),d.online?"Online":d.online===false?"Offline":"Prüfe"));
+    b.onclick=()=>openDev(d.key);L.append(b)})}
+
+function renderEnergy(){
+  const E=$("energy");E.replaceChildren();
+  const on=S.devices.filter(d=>d.online);
+  if(!on.length){E.append(el("div","empty","Keine Daten. Werte erscheinen, sobald ein Speicher online ist."));return}
+  on.forEach(d=>E.append(kv(d.name,kwh(d.today_in_wh),"Geladen. Entladen: "+kwh(d.today_out_wh))))}
+
+/* ---------- Diagramme ---------- */
+function chart(box,leg,key,h){
+  box.replaceChildren();leg.replaceChildren();
+  const devs=S.devices.map((d,i)=>({d,i,pts:(H.series[d.key]||[]).filter(p=>p[key==="soc"?1:2]!=null)})).filter(x=>x.pts.length>1);
+  if(!devs.length){box.append(el("div","empty","Noch keine Verlaufsdaten. Sie entstehen, während die App läuft."));return}
+  const W=Math.max(300,Math.round(box.clientWidth||600)),L=46,R=8,T=10,B=24,t0=H.since,t1=S.now,ns="http://www.w3.org/2000/svg",idx=key==="soc"?1:2;
+  let lo=0,hi=100,step=25;
+  if(key==="power"){const all=devs.flatMap(x=>x.pts.map(p=>-p[2]));lo=Math.min(-100,...all);hi=Math.max(100,...all);
+    step=niceStep((hi-lo)/4);lo=Math.floor(lo/step)*step;hi=Math.ceil(hi/step)*step}
+  const svg=document.createElementNS(ns,"svg");svg.setAttribute("viewBox",`0 0 ${W} ${h}`);svg.setAttribute("role","img");
+  svg.setAttribute("aria-label",key==="soc"?"Ladestand in Prozent, letzte 24 Stunden":"Lade- und Entladeleistung in Watt, letzte 24 Stunden");
+  const mk=(n,a)=>{const e=document.createElementNS(ns,n);for(const k in a)e.setAttribute(k,a[k]);svg.append(e);return e};
+  const X=t=>L+(t-t0)/(t1-t0)*(W-L-R),Y=v=>T+(hi-v)/(hi-lo)*(h-T-B);
+  const ticks=[];for(let v=lo;v<=hi+1e-9;v+=step)ticks.push(v);
+  ticks.forEach(v=>{mk("line",{x1:L,x2:W-R,y1:Y(v),y2:Y(v),stroke:"var(--line)","stroke-width":v===0&&key==="power"?1.5:1});
+    mk("text",{x:L-7,y:Y(v)+4,"text-anchor":"end","font-size":11,fill:"var(--mute)"}).textContent=key==="soc"?v+" %":fmt(v)+" W"});
+  for(let k=0;k<=4;k++){const t=t0+k*6*3600;mk("text",{x:X(t),y:h-6,"text-anchor":k===0?"start":k===4?"end":"middle","font-size":11,fill:"var(--mute)"})
+    .textContent=new Date(t*1000).toLocaleTimeString("de-AT",{hour:"2-digit",minute:"2-digit"})}
+  devs.forEach(({d,i,pts})=>{const c=color(d,i);
+    mk("polyline",{points:pts.map(p=>X(p[0]).toFixed(1)+","+Y(key==="soc"?p[1]:-p[2]).toFixed(1)).join(" "),fill:"none",stroke:c,"stroke-width":2.2,"stroke-linejoin":"round","stroke-linecap":"round"});
+    const s=el("span"),sw=el("i");sw.style.setProperty("--pc",c);s.append(sw,document.createTextNode(d.name));leg.append(s)});
+  box.append(svg)}
+function niceStep(x){const p=Math.pow(10,Math.floor(Math.log10(x||1))),n=x/p;return(n<=1?1:n<=2?2:n<=5?5:10)*p}
+function drawCharts(){if(!H||!S)return;chart($("miniChart"),$("miniLeg"),"soc",170);chart($("bigChart"),$("bigLeg"),metric,260);
+  $("histNote").textContent=metric==="power"?"Werte über null: Speicher lädt. Unter null: Speicher gibt Strom ab.":""}
+document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{metric=b.dataset.metric;
+  document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed",x===b));drawCharts()});
+
+/* ---------- Gerät ---------- */
+function find(k){return S.devices.find(d=>d.key===k)}
+function openDev(k){openKey=k;fillDev(k);$("dDev").showModal()}
+function fillDev(k){const d=find(k);if(!d){$("dDev").close();return}
+  $("dvName").textContent=d.name;
+  $("dvSub").textContent=(d.phase?"Phase "+d.phase+", ":"")+(d.online?"online":d.online===false?ago(d.last_seen,S.now):"wird abgefragt");
+  const D=$("dvDet");D.replaceChildren();
+  if(d.online){
+    const inh=d.rest_wh!=null?d.rest_wh:(d.cap_wh&&d.soc!=null?d.cap_wh*d.soc/100:null);
+    D.append(kv("Ladestand",fmt(d.soc)+" %",kwh(inh)+" von "+kwh(d.cap_wh),d.soc),
+      kv("Leistung",flow(d.power).t),
+      kv("Betriebsart",MODE[d.mode]||d.mode||"–"),
+      kv("CT-Messgerät",d.ct===1?"Verbunden":d.ct===0?"Nicht verbunden":"–"),
+      kv("Heute geladen",kwh(d.today_in_wh),"Heute entladen "+kwh(d.today_out_wh)),
+      kv("Notstrom-Ausgang",watt(d.offgrid)),
+      kv("Temperatur",d.temp==null?"–":fmt(d.temp,1)+" °C"),
+      kv("WLAN",d.rssi==null?"–":fmt(d.rssi)+" dBm",d.ssid?"Netz "+d.ssid:null),
+      kv("Gerät",d.model||"–",(d.fw!=null?"Firmware "+d.fw+", ":"")+"IP "+d.ip));
+  }else D.append(el("p","help","Keine aktuellen Werte. Der Speicher antwortet nicht auf "+d.ip+":"+d.port+". In der Marstek-App prüfen, ob er im WLAN ist und die lokale Schnittstelle eingeschaltet ist."));
+  $("dvMode").disabled=!d.online}
+$("dvMode").onclick=()=>{const d=find(openKey);$("dDev").close();openMode(d)};
+$("dvEdit").onclick=()=>{const d=find(openKey);$("dDev").close();openAdd(d)};
+$("dvDel").onclick=async()=>{const d=find(openKey);if(!confirm(d.name+" aus der App entfernen? Am Speicher selbst ändert sich nichts."))return;
+  await api("/api/devices/delete",{key:d.key});$("dDev").close();load()};
+
+/* ---------- Hinzufügen ---------- */
+function openAdd(d){editKey=d&&d.key?d.key:null;
+  $("aTitle").textContent=editKey?"Speicher bearbeiten":"Speicher hinzufügen";$("aDiscWrap").hidden=!!editKey;
+  $("aName").value=editKey?d.name:"";$("aIp").value=editKey?d.ip:"";$("aPort").value=editKey?d.port:30000;
+  $("aPhase").value=editKey?(d.phase||""):(["L1","L2","L3"].find(p=>!S||!S.devices.some(x=>x.phase===p))||"");
+  $("aIp").disabled=$("aPort").disabled=!!editKey;$("aErr").textContent="";$("disc").textContent="";$("dAdd").showModal()}
+$("bAdd").onclick=()=>openAdd();
+$("aOk").onclick=async()=>{$("aErr").textContent="";
+  try{await api("/api/devices",{name:$("aName").value,ip:$("aIp").value,port:+$("aPort").value,phase:$("aPhase").value});
+    $("dAdd").close();setTimeout(load,editKey?100:3000);load()}catch(e){$("aErr").textContent=e.message}};
+$("bDisc").onclick=async()=>{const o=$("disc");o.textContent="Suche läuft, etwa 3 Sekunden.";
+  try{const r=await api("/api/discover",{});o.replaceChildren();
+    if(!r.found.length){o.textContent="Kein Speicher gefunden. In der Marstek-App prüfen, ob die lokale Schnittstelle eingeschaltet ist, oder die IP-Adresse eintragen.";return}
+    r.found.forEach(f=>{const b=el("button","btn ghost",f.device+" unter "+f.ip+" übernehmen");
+      b.onclick=()=>{$("aIp").value=f.ip;$("aPort").value=f.port;if(!$("aName").value)$("aName").value=f.device};o.append(b)})}
+  catch(e){o.textContent=e.message}};
+
+/* ---------- Betriebsart ---------- */
+function openMode(d){openKey=d.key;$("mTitle").textContent=d.name;$("mMode").value=MODE[d.mode]?d.mode:"Auto";$("mErr").textContent="";modeFields();$("dMode").showModal()}
+function modeFields(){const m=$("mMode").value;$("mPow").hidden=m==="Auto"||m==="AI";$("mPas").hidden=m!=="Passive";$("mMan").hidden=m!=="Manual"}
+$("mMode").onchange=modeFields;
+$("mOk").onclick=async()=>{$("mErr").textContent="";$("mOk").disabled=true;
+  try{await api("/api/mode",{key:openKey,mode:$("mMode").value,richtung:$("mDir").value,power:+$("mW").value||0,
+      dauer_min:+$("mMin").value||0,start:$("mS").value,ende:$("mE").value});
+    $("dMode").close();setTimeout(load,2500)}catch(e){$("mErr").textContent=e.message}finally{$("mOk").disabled=false}};
+
+/* ---------- Einstellungen ---------- */
+$("sOk").onclick=async()=>{$("sErr").textContent="";
+  try{await api("/api/settings",{interval:+$("sInt").value||60,invert:$("sInv").checked,ct_invert:$("sCt").checked});
+    $("sErr").textContent="";$("sOk").textContent="Gespeichert";setTimeout(()=>$("sOk").textContent="Einstellungen speichern",1800);load()}
+  catch(e){$("sErr").textContent=e.message}};
+document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>b.closest("dialog").close());
+document.querySelectorAll("dialog").forEach(d=>d.addEventListener("click",e=>{if(e.target===d)d.close()}));
+
+/* ---------- Laden ---------- */
+async function load(){
+  try{S=await api("/api/state");render();H=await api("/api/history");drawCharts()}
+  catch(e){$("dot").className="dot bad";$("stamp").textContent=e.message}}
+
+/* ---------- Vorschau ohne Server (GitHub Pages) ---------- */
+const Demo=(()=>{
+  const now=()=>Math.floor(Date.now()/1000);
+  const devs=[
+    {key:"d1",name:"Venus E L1",phase:"L1",ip:"192.168.1.51",port:30000,soc:15,power:-231,mode:"Auto",ct:1,on:true},
+    {key:"d2",name:"Venus E L2",phase:"L2",ip:"192.168.1.52",port:30000,soc:23,power:0,mode:"Auto",ct:0,on:true},
+    {key:"d3",name:"Venus E L3",phase:"L3",ip:"192.168.1.53",port:30000,soc:null,power:null,mode:null,ct:null,on:false}];
+  let cfg={interval:60,invert:false,ct_invert:false};
+  function snap(){const t=now();return{now:t,demo:true,interval:cfg.interval,invert:cfg.invert,ct_invert:cfg.ct_invert,
+    devices:devs.map(d=>({key:d.key,name:d.name,phase:d.phase,ip:d.ip,port:d.port,online:d.on,last_seen:d.on?t-20:t-3*86400,
+      soc:d.soc,cap_wh:d.on?5120:null,rest_wh:d.on?Math.round(51.2*d.soc):null,power:d.power,offgrid:d.on?0:null,mode:d.mode,ct:d.ct,
+      phases:d.ct?[-412,138,96]:[null,null,null],grid_total:d.ct?-178:null,temp:d.on?19.5:null,rssi:d.on?-62:null,ssid:d.on?"Heimnetz":null,
+      model:d.on?"VenusE 3.0":null,fw:d.on?148:null,today_in_wh:d.on?(d.key==="d1"?780:710):null,today_out_wh:d.on?0:null}))}}
+  function hist(){const t1=now(),t0=t1-86400,series={};
+    const K=[[0,34],[7,14],[10,12],[13,22],[16,30],[19,26],[24,34]];
+    const at=(h,o)=>{for(let i=1;i<K.length;i++)if(h<=K[i][0]){const a=K[i-1],b=K[i];return a[1]+(b[1]-a[1])*(h-a[0])/(b[0]-a[0])+o}return K[0][1]+o};
+    devs.filter(d=>d.on).forEach((d,k)=>{const a=[];for(let t=t0;t<=t1;t+=900){const dt=new Date(t*1000),h=dt.getHours()+dt.getMinutes()/60;
+      const soc=at(h,k*-4),p=h<7?160:h<10?0:h<16?(k?0:-231):h<19?120:150;a.push([t,Math.round(soc),p])}
+      const n=a.length;for(let i=0;i<8&&i<n;i++){const w=(i+1)/8;a[n-8+i][1]=Math.round(a[n-8+i][1]*(1-w)+d.soc*w)}a[n-1][2]=d.power;series[d.key]=a});
+    return{since:t0,series}}
+  return{call(path,body){return new Promise((res,rej)=>setTimeout(()=>{
+    if(path==="/api/state")return res(snap());
+    if(path==="/api/history")return res(hist());
+    if(path==="/api/discover")return res({found:[]});
+    if(path==="/api/settings"){Object.assign(cfg,{interval:Math.max(15,Math.min(3600,body.interval|0)),invert:!!body.invert,ct_invert:!!body.ct_invert});return res({ok:true})}
+    if(path==="/api/mode"){const d=devs.find(x=>x.key===body.key);if(!d||!d.on)return rej(new Error("Keine Antwort vom Speicher"));
+      d.mode=body.mode;d.power=body.mode==="Auto"||body.mode==="AI"?(d.ct?-231:0):(body.richtung==="entladen"?1:-1)*(body.power||0);return res({ok:true})}
+    if(path==="/api/devices"){const d=devs.find(x=>x.ip===String(body.ip).trim()&&x.port===+body.port);
+      if(d){d.name=body.name||d.name;d.phase=body.phase||""}else devs.push({key:"d"+(devs.length+1)+Date.now(),name:body.name||body.ip,phase:body.phase||"",ip:String(body.ip),port:+body.port||30000,on:false});return res({ok:true})}
+    if(path==="/api/devices/delete"){const i=devs.findIndex(x=>x.key===body.key);if(i>=0)devs.splice(i,1);return res({ok:true})}
+    rej(new Error("Nicht verfügbar"))},120))}}})();
+
+const start=(location.hash||"#home").slice(1);show(TITLES[start]?start:"home");
+load();setInterval(()=>{if(!document.hidden)load()},15000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)load()});
+if("serviceWorker"in navigator&&!STATIC&&location.protocol==="https:"){/* bewusst kein Offline-Cache: Werte müssen live sein */}
+</script>
+</body>
+</html>
