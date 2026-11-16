@@ -237,7 +237,8 @@ nav button[aria-current=page]{color:var(--n);font-weight:600}
       <div class="panel pad">
         <p style="margin:0">Angemeldet als <b id="cMail"></b></p>
         <p class="help" style="margin:6px 0 12px">Die Werte kommen von den Marstek-Servern. Die Speicher melden sich dort in Abständen von einigen Minuten, schneller aktualisieren sich die Werte hier nicht.</p>
-        <button class="btn danger" id="cOut">Abmelden</button>
+        <div class="row-btns"><button class="btn" id="cDiag">Rohdaten von Marstek anzeigen</button><button class="btn danger" id="cOut">Abmelden</button></div>
+        <pre id="cRaw" hidden style="white-space:pre-wrap;word-break:break-all;font-size:12px;background:var(--case);border-radius:8px;padding:10px;margin:12px 0 0;max-height:60vh;overflow:auto"></pre>
       </div>
     </section>
     <section class="panel pad" id="localSet">
@@ -427,17 +428,24 @@ const Cloud=(()=>{
       tok=null;ls.del(TKEY);
       if(k===1)throw new Error("Geräteliste nicht erhalten"+(j&&j.msg?" ("+j.msg+")":"")+".")}}
   function map(raw,i,now){
-    const rt=num(raw.report_time),ts=rt==null?null:rt>1e12?rt/1000:rt>1e9?rt:null;
+    const ts=parseTime(raw.report_time);
     const name=String(raw.name||raw.sn||("Speicher "+(i+1)));
     const m=name.match(/L\s?([123])(?!\d)/i);
     const ch=num(raw.charge),dc=num(raw.discharge);
     const capK=num(raw.capacity_kwh)||num(raw.capacity);
     return{key:String(raw.devid||raw.sn||i),name,phase:m?"L"+m[1]:"",ip:"Marstek-Cloud",port:"",
-      online:ts?now-ts<1800:true,last_seen:ts?Math.round(ts):0,report_ts:ts,
+      online:ts?now-ts<OFFLINE_AFTER:true,last_seen:ts?Math.round(ts):0,report_ts:ts,
       soc:num(raw.soc),cap_wh:capK?(capK>100?capK:capK*1000):5120,rest_wh:null,
       power:ch==null&&dc==null?null:(dc||0)-(ch||0),load:num(raw.load),offgrid:null,mode:null,ct:null,
       phases:[null,null,null],grid_total:null,temp:null,rssi:null,ssid:null,
       model:raw.type||null,fw:raw.version!=null?raw.version:null,sn:raw.sn||null,today_in_wh:null,today_out_wh:null}}
+  const OFFLINE_AFTER=3*3600;   /* erst nach 3 Stunden ohne Meldung als offline anzeigen */
+  function parseTime(v){
+    if(v==null||v==="")return null;
+    if(typeof v==="number"||/^\d+(\.\d+)?$/.test(String(v).trim())){const x=Number(v);
+      if(x>1e12)return x/1000;if(x>1e9)return x;return null}
+    const t=Date.parse(String(v).trim().replace(" ","T"));return isFinite(t)?t/1000:null}
+  let lastRaw=null;
   function hist(){try{return JSON.parse(ls.get(HKEY)||"{}")}catch(e){return{}}}
   function remember(devs,now){const h=hist(),cut=now-86400;
     devs.forEach(d=>{const a=(h[d.key]||[]).filter(p=>p[0]>=cut);const last=a[a.length-1];
@@ -446,12 +454,13 @@ const Cloud=(()=>{
   return{
     async signIn(mail,pwd){const c={mail:mail.trim(),pwd:md5(pwd)};
       await login(c.mail,c.pwd);ls.set("speicher-cloud",JSON.stringify(c));cache=null},
+    raw(){return lastRaw},
     signOut(){["speicher-cloud",TKEY,HKEY].forEach(ls.del);cache=null},
     async call(path){
       const now=Math.floor(Date.now()/1000);
       if(path==="/api/state"){
         if(!cache||Date.now()-cacheAt>55000){
-          const raw=await list();
+          const raw=await list();lastRaw=raw;
           const devs=raw.filter(r=>r&&r.soc!=null).map((r,i)=>map(r,i,now));
           remember(devs,now);cache=devs;cacheAt=Date.now()}
         return{now,source:"cloud",interval:60,invert:false,ct_invert:false,devices:cache}}
@@ -492,7 +501,8 @@ function render(){
     m.append(el("div","wire"+(d.phase?"":" none")),el("span","led"),el("div","ph",d.phase||"–"),el("div","nm",d.name));
     const soc=el("div","soc");if(d.online&&d.soc!=null)soc.append(document.createTextNode(fmt(d.soc)),el("small",null,"%"));else soc.textContent="–";m.append(soc);
     const slot=el("div","slot"),fill=el("i",socClass(d.soc));fill.style.height=(d.online?Math.max(0,Math.min(100,d.soc||0)):0)+"%";slot.append(fill);m.append(slot);
-    const f=d.online?flow(d.power):d.online===false?{t:"Offline",c:"off"}:{t:"Wird abgefragt",c:"idle"};
+    let f=d.online?flow(d.power):d.online===false?{t:"Offline",c:"off"}:{t:"Wird abgefragt",c:"idle"};
+    if(d.online&&d.report_ts&&S.now-d.report_ts>900)f={t:"Stand vor "+(S.now-d.report_ts<5400?Math.round((S.now-d.report_ts)/60)+" min":Math.round((S.now-d.report_ts)/3600)+" h"),c:"idle"};
     m.append(el("div","st "+f.c,f.t));
     m.onclick=()=>openDev(d.key);
     mods.append(m)});
@@ -668,6 +678,10 @@ $("lOk").onclick=async()=>{$("lErr").textContent="";const m=$("lMail").value,p=$
   catch(e){$("lErr").textContent=e.blocked?BLOCKED:e.message}
   finally{$("lOk").disabled=false;$("lOk").textContent="Anmelden"}};
 $("lDemo").onclick=()=>{SRC="demo";S=null;show("home");load()};
+$("cDiag").onclick=()=>{const r=Cloud.raw(),p=$("cRaw");p.hidden=false;
+  if(!r){p.textContent="Noch keine Daten geladen. Kurz warten und erneut tippen.";return}
+  const now=Math.floor(Date.now()/1000);
+  p.textContent="Abruf: "+new Date().toLocaleString("de-AT")+" (Unix "+now+")\n\n"+JSON.stringify(r,null,2)};
 $("cOut").onclick=()=>{if(!confirm("Abmelden? Der gespeicherte Verlauf in diesem Browser wird gelöscht."))return;
   Cloud.signOut();SRC="login";S=null;H=null;show("login")};
 
