@@ -368,6 +368,8 @@ function ago(ts,now){if(!ts)return"bisher nicht erreicht";const s=now-ts;
 function color(d,i){return PHASE_VAR[d.phase]||EXTRA[i%EXTRA.length]}
 function flow(p){if(p==null)return{t:"–",c:"idle"};if(Math.abs(p)<5)return{t:"Standby",c:"idle"};
   return p<0?{t:"Lädt "+watt(-p),c:"chg"}:{t:"Entlädt "+watt(p),c:"dis"}}
+function stamp(ts){const t=new Date(ts*1000),n=new Date();
+  return(t.toDateString()===n.toDateString()?"":t.toLocaleDateString("de-AT",{day:"2-digit",month:"2-digit"})+" ")+t.toLocaleTimeString("de-AT",{hour:"2-digit",minute:"2-digit"})}
 function socClass(s){return s<15?"low":s<30?"mid":""}
 
 /* ---------- Datenzugriff ---------- */
@@ -445,7 +447,7 @@ const Cloud=(()=>{
     if(typeof v==="number"||/^\d+(\.\d+)?$/.test(String(v).trim())){const x=Number(v);
       if(x>1e12)return x/1000;if(x>1e9)return x;return null}
     const t=Date.parse(String(v).trim().replace(" ","T"));return isFinite(t)?t/1000:null}
-  let lastRaw=null;
+  let lastRaw=null,extra={};
   function hist(){try{return JSON.parse(ls.get(HKEY)||"{}")}catch(e){return{}}}
   function remember(devs,now){const h=hist(),cut=now-86400;
     devs.forEach(d=>{const a=(h[d.key]||[]).filter(p=>p[0]>=cut);const last=a[a.length-1];
@@ -461,9 +463,13 @@ const Cloud=(()=>{
       if(path==="/api/state"){
         if(!cache||Date.now()-cacheAt>55000){
           const raw=await list();lastRaw=raw;
-          const devs=raw.filter(r=>r&&r.soc!=null).map((r,i)=>map(r,i,now));
+          const isBat=r=>r&&(/^VNS/i.test(r.type||"")||num(r.battery_num)>0);
+          const devs=raw.filter(isBat).map((r,i)=>map(r,i,now));
+          const meter=raw.find(r=>/^HME/i.test(r.type||"")),inv=raw.filter(r=>/^HMI/i.test(r.type||""));
+          extra={grid:meter?{w:num(meter.grid),ts:parseTime(meter.report_time),name:meter.name}:null,
+            pv:inv.length?{w:inv.reduce((a,r)=>a+(num(r.pv)||0),0),ts:Math.max(...inv.map(r=>parseTime(r.report_time)||0))||null,name:inv.map(r=>r.name).join(", ")}:null};
           remember(devs,now);cache=devs;cacheAt=Date.now()}
-        return{now,source:"cloud",interval:60,invert:false,ct_invert:false,devices:cache}}
+        return{now,source:"cloud",interval:60,invert:false,ct_invert:false,devices:cache,extra}}
       if(path==="/api/history")return{since:now-86400,series:hist()};
       throw new Error("In der Cloud-Ansicht nicht verfügbar. Das geht in der Marstek-App.")}}})();
 
@@ -499,9 +505,10 @@ function render(){
     m.style.setProperty("--pc",color(d,i));
     m.setAttribute("aria-label",d.name+", "+(d.online?fmt(d.soc)+" Prozent":"offline"));
     m.append(el("div","wire"+(d.phase?"":" none")),el("span","led"),el("div","ph",d.phase||"–"),el("div","nm",d.name));
-    const soc=el("div","soc");if(d.online&&d.soc!=null)soc.append(document.createTextNode(fmt(d.soc)),el("small",null,"%"));else soc.textContent="–";m.append(soc);
+    const soc=el("div","soc");if((d.online||SRC==="cloud")&&d.soc!=null)soc.append(document.createTextNode(fmt(d.soc)),el("small",null,"%"));else soc.textContent="–";m.append(soc);
     const slot=el("div","slot"),fill=el("i",socClass(d.soc));fill.style.height=(d.online?Math.max(0,Math.min(100,d.soc||0)):0)+"%";slot.append(fill);m.append(slot);
     let f=d.online?flow(d.power):d.online===false?{t:"Offline",c:"off"}:{t:"Wird abgefragt",c:"idle"};
+    if(SRC==="cloud"&&d.online===false&&d.report_ts)f={t:"Stand "+stamp(d.report_ts),c:"off"};
     if(d.online&&d.report_ts&&S.now-d.report_ts>900)f={t:"Stand vor "+(S.now-d.report_ts<5400?Math.round((S.now-d.report_ts)/60)+" min":Math.round((S.now-d.report_ts)/3600)+" h"),c:"idle"};
     m.append(el("div","st "+f.c,f.t));
     m.onclick=()=>openDev(d.key);
@@ -510,7 +517,13 @@ function render(){
 
   /* Hinweise */
   const N=$("notes");N.replaceChildren();
+  const stale=cloud?D.filter(d=>d.online===false):[];
+  if(stale.length){const n=el("div","note"),t=el("div");
+    t.append(el("b",null,"Marstek-Cloud liefert keine aktuellen Speicherwerte"),
+      document.createTextNode(stale.map(d=>(d.phase||d.name)+": Stand "+(d.report_ts?stamp(d.report_ts):"unbekannt")).join(", ")+". Die Marstek-App bekommt Live-Werte über eine direkte Verbindung, die von einer Webseite aus nicht nutzbar ist. Angezeigt werden die letzten Werte, die Marstek gespeichert hat."));
+    n.append(t);N.append(n)}
   D.forEach(d=>{
+    if(cloud)return;
     if(d.online===false){const n=el("div","note bad"),t=el("div");t.append(el("b",null,d.name+(cloud?" ist offline":" antwortet nicht")),
       document.createTextNode(cloud?"Hat sich "+ago(d.last_seen,now).replace("zuletzt ","").replace(" erreicht","")+" zuletzt bei Marstek gemeldet. WLAN-Verbindung und Stromversorgung prüfen.":"Seit "+ago(d.last_seen,now).replace("zuletzt ","").replace(" erreicht","")+". WLAN-Verbindung, Stromversorgung und lokale Schnittstelle in der Marstek-App prüfen."));
       if(!d.last_seen)t.lastChild.textContent=cloud?"Keine Meldung bei Marstek. WLAN-Verbindung und Stromversorgung prüfen.":"Bisher keine Antwort. WLAN-Verbindung, Stromversorgung und lokale Schnittstelle in der Marstek-App prüfen.";
@@ -521,10 +534,11 @@ function render(){
 
   /* Anlage */
   const P=$("plant");P.replaceChildren();
-  const cap=on.reduce((a,d)=>a+(d.cap_wh||0),0);
-  const rest=on.reduce((a,d)=>a+(d.cap_wh&&d.soc!=null?d.cap_wh*d.soc/100:0),0);
+  const base=cloud?D.filter(d=>d.soc!=null):on;
+  const cap=base.reduce((a,d)=>a+(d.cap_wh||0),0);
+  const rest=base.reduce((a,d)=>a+(d.cap_wh&&d.soc!=null?d.cap_wh*d.soc/100:0),0);
   const pw=on.reduce((a,d)=>a+(d.power||0),0);
-  P.append(kv("Gespeichert",cap?kwh(rest):"–",cap?"von "+kwh(cap)+" in "+on.length+" von "+D.length+" Speichern":"Keine Daten",cap?rest/cap*100:null));
+  P.append(kv("Gespeichert",cap?kwh(rest):"–",cap?(cloud?"von "+kwh(cap)+", letzte Werte laut Marstek":"von "+kwh(cap)+" in "+on.length+" von "+D.length+" Speichern"):"Keine Daten",cap?rest/cap*100:null));
   const f=flow(anyOn?pw:null);
   P.append(kv("Speicher gesamt",f.c==="idle"?(anyOn?"0 W":"–"):watt(Math.abs(pw)),anyOn?(f.c==="chg"?"Die Speicher laden":f.c==="dis"?"Die Speicher geben Strom ab":"Kein Laden oder Entladen"):"Keine Daten"));
   const src=on.find(d=>d.ct===1);
@@ -536,6 +550,9 @@ function render(){
       c.append(el("b",null,fmt(src.phases[i])+" W"),el("span",null,l));ph.append(c)});
     row.append(ph);P.append(row);
   }else if(!cloud)P.append(kv("Netz am Hausanschluss","–","Kein Speicher meldet Messwerte vom CT"));
+  if(cloud&&S.extra){const g=S.extra.grid,pv=S.extra.pv;
+    if(g)P.append(kv("Netz laut "+g.name,watt(g.w==null?null:Math.abs(g.w)),(g.w==null?"":Math.abs(g.w)<10?"Ausgeglichen":g.w>0?"Bezug aus dem Netz":"Einspeisung ins Netz")+(g.ts?", Stand "+stamp(g.ts):"")));
+    if(pv)P.append(kv("Solarleistung",watt(pv.w),"Laut "+pv.name+(pv.ts?", Stand "+stamp(pv.ts):"")))}
   const tin=sumOrNull(on.map(d=>d.today_in_wh)),tout=sumOrNull(on.map(d=>d.today_out_wh));
   if(!cloud)P.append(kv("Heute geladen",kwh(tin),"Heute entladen "+kwh(tout)));
 
